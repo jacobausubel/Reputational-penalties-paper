@@ -58,13 +58,43 @@ library(stats)
 
 ```{r, include = FALSE, message = FALSE}
 #Reading in data
-abortion_s1 <- read_csv("Abortion Study_December 4, 2023_21.29.csv")
+#abortion_s1_private <- read_csv("Abortion Study_December 4, 2023_21.29.csv")
 ```
 
 ```{r, include = FALSE, message = FALSE}
-#Filtering abortion dataset
+#Removing variables that could be sensitive in a pubic release
+#Also, filtering to just respondents with an IP Address
+#abortion_s1_public <-
+#  abortion_s1_private %>%
+#  filter(Status == "IP Address")
+
+#abortion_s1_public <-
+#  abortion_s1_public %>%
+#  select(-c(Status, IPAddress, ResponseId, RecipientLastName, RecipientFirstName, 
+#            RecipientEmail, ExternalReference, LocationLatitude, LocationLongitude,
+#            DistributionChannel, metainfo_Browser, metainfo_Version, 
+#            `metainfo_Operating System`, metainfo_Resolution, state, MID))
+```
+
+```{r, include = FALSE, message = FALSE}
+#Creating public CSV file
+#write.csv(abortion_s1_public, "Abortion Study_December 4, 2023_21.29 - PUBLIC.csv", row.names = FALSE)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Clear global environment
+rm(list = ls())
+```
+
+```{r, include = FALSE, message = FALSE}
+#Reading in data
+abortion_s1 <- read_csv("Abortion Study_December 4, 2023_21.29 - PUBLIC.csv")
+```
+
+```{r, include = FALSE, message = FALSE}
+#Filtering abortion dataset to just those who passed an attention check and consented
 abortion_s1_cleaned <- abortion_s1 %>%
-  filter(Status == "IP Address") %>%
+  #filter(Status == "IP Address") %>%
   filter(consent == "Yes") %>%
   filter(attention_check == "Extremely interested,Very interested")
 ```
