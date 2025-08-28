@@ -1,0 +1,634 @@
+---
+title: "Reputation penalty - study 3, survey 2"
+author: "Jacob Ausubel, Annika Davies, and Ethan Porter"
+date: "2025-08-28"
+output:
+  pdf_document:
+    extra_dependencies: float
+  word_document: default
+  html_document:
+    df_print: paged
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Study 3, survey 2
+
+```{r, include = FALSE, message = FALSE}
+#Clear global environment
+rm(list = ls())
+```
+
+```{r, include = FALSE, message = FALSE}
+#Loading various packages
+library(readr)
+library(lmtest)
+library(sandwich)
+library(margins)
+library(texreg)
+library(haven)
+library(MASS)
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(marginaleffects)
+library(estimatr)
+library(imputeTS)
+library(fabricatr)
+library(tidyr)
+library(tidyverse)
+library(lubridate)
+library(qualtRics)
+library(naniar)
+library(RCT)
+library(texreg)
+library(huxtable)
+library(stargazer)
+library(ggpubr)
+library(vtable)
+library(cobalt)
+library(kableExtra)
+library(xtable)
+library(ggthemes)
+library(stats)
+library(pwr)
+library(WebPower)
+library(effectsize)
+library(TOSTER)
+library(biostat3)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Read in data
+#abortion_s3_private <- read_csv("Abortion Study 3 Wave 2_July 11, 2024_14.13.csv")
+```
+
+```{r, include = FALSE, message = FALSE}
+#Renaming one variable
+#abortion_s3_private <-
+#  abortion_s3_private %>%
+#  rename(Q1_125 = Q1...125)
+```
+
+
+```{r, include = FALSE, message = FALSE}
+#Filter to just respondents with IP Addresses
+#Remove personally identifying information
+#abortion_s3_public <-
+#  abortion_s3_private %>%
+#  filter(Status == "IP Address") %>%
+#  select(-c(Status, IPAddress, ResponseId, RecipientLastName, RecipientFirstName, RecipientEmail, 
+#            ExternalReference, LocationLatitude, LocationLongitude, DistributionChannel, Q2_Browser, 
+#            `Q2_Operating System`, Q2_Resolution, assignmentId, participantId, projectId,
+#            state, zip))
+```
+
+```{r, include = FALSE, message = FALSE}
+#Creating public CSV file
+#write.csv(abortion_s3_public, "Abortion Study 3 Wave 2_July 11, 2024_14.13 - PUBLIC.csv", row.names = FALSE)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Reading in public data
+abortion_s3_cleaned <- read_csv("Abortion Study 3 Wave 2_July 11, 2024_14.13 - PUBLIC.csv")
+```
+
+```{r, include = FALSE, message = FALSE}
+#Filtering to people who pass both attention checks
+abortion_s3_cleaned$ac1 <- trimws(abortion_s3_cleaned$ac1)
+abortion_s3_cleaned_v2 <-
+  abortion_s3_cleaned %>%
+  filter(ac1 %in%
+    c("Talked on the telephone",
+      "Watched television",
+      "Watched television,Talked on the telephone",
+      "Watched television,Talked on the telephone,None of these")) %>%
+  filter(ac2 == "Extremely interested,Very interested")
+```
+
+```{r, include = FALSE, message = FALSE}
+#Creating Gruber condition variable
+abortion_s3_cleaned_v2$gruber_condition <- NA
+abortion_s3_cleaned_v2$gruber_condition[
+  abortion_s3_cleaned_v2$gruber_misinfo == 1
+  ] <- "misinfo"
+abortion_s3_cleaned_v2$gruber_condition[
+  abortion_s3_cleaned_v2$gruber_fc == 1
+  ] <- "fc"
+abortion_s3_cleaned_v2$gruber_condition[
+  abortion_s3_cleaned_v2$gruber_c == 1
+  ] <- "control"
+```
+
+```{r, include = FALSE, message = FALSE}
+#Creating Shapiro condition variable
+abortion_s3_cleaned_v2$shapiro_condition <- NA
+abortion_s3_cleaned_v2$shapiro_condition[
+  abortion_s3_cleaned_v2$shapiro_misinfo == 1
+  ] <- "misinfo"
+abortion_s3_cleaned_v2$shapiro_condition[
+  abortion_s3_cleaned_v2$shapiro_fc == 1
+  ] <- "fc"
+abortion_s3_cleaned_v2$shapiro_condition[
+  abortion_s3_cleaned_v2$shapiro_c == 1
+  ] <- "control"
+```
+
+```{r, include = FALSE, message = FALSE}
+#Creating overall condition variable
+#In other words, I'm bringing in data from both the Gruber
+  #condition and Shapiro condition variables
+abortion_s3_cleaned_v2$condition <- NA
+abortion_s3_cleaned_v2$condition[
+  !(is.na(abortion_s3_cleaned_v2$shapiro_condition))
+  ] <- abortion_s3_cleaned_v2$shapiro_condition[
+  !(is.na(abortion_s3_cleaned_v2$shapiro_condition))]
+abortion_s3_cleaned_v2$condition[
+  !(is.na(abortion_s3_cleaned_v2$gruber_condition))
+  ] <- abortion_s3_cleaned_v2$gruber_condition[
+  !(is.na(abortion_s3_cleaned_v2$gruber_condition))]
+```
+
+```{r, include = FALSE, message = FALSE}
+#Creating a familiarity variable
+#High = Shapiro
+#Low = Gruber
+abortion_s3_cleaned_v2$familiarity <- NA
+abortion_s3_cleaned_v2$familiarity[
+  abortion_s3_cleaned_v2$shapiro_condition %in% c("control", "fc", "misinfo")
+  ] <- "High"
+abortion_s3_cleaned_v2$familiarity[
+  abortion_s3_cleaned_v2$gruber_condition %in% c("control", "fc", "misinfo")
+  ] <- "Low"
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding partisanship
+abortion_s3_cleaned_v2$pid7 <- NA
+abortion_s3_cleaned_v2$pid7[
+  abortion_s3_cleaned_v2$pid_dem == "Strong Democrat"
+  ] <- 1
+abortion_s3_cleaned_v2$pid7[
+  abortion_s3_cleaned_v2$pid_dem == "Not very strong Democrat"
+  ] <- 2
+abortion_s3_cleaned_v2$pid7[
+  abortion_s3_cleaned_v2$pid_indep == "Closer to the Democratic Party"
+  ] <- 3
+abortion_s3_cleaned_v2$pid7[
+  abortion_s3_cleaned_v2$pid_indep == "Neither"
+  ] <- 4
+abortion_s3_cleaned_v2$pid7[
+  abortion_s3_cleaned_v2$pid_indep == "Closer to the Republican Party"
+  ] <- 5
+abortion_s3_cleaned_v2$pid7[
+  abortion_s3_cleaned_v2$pid_rep == "Not very strong Republican"
+  ] <- 6
+abortion_s3_cleaned_v2$pid7[
+  abortion_s3_cleaned_v2$pid_rep == "Strong Republican"
+  ] <- 7
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding gender
+abortion_s3_cleaned_v2$male <-
+  ifelse(abortion_s3_cleaned_v2$gender == "Man", 1, 0)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding age
+abortion_s3_cleaned_v2$age <-
+  2024 - as.numeric(abortion_s3_cleaned_v2$birthyear)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding religiosity
+abortion_s3_cleaned_v2$monthly_attend <-
+  ifelse(abortion_s3_cleaned_v2$religiosity %in% 
+    c("More than once a week", "Once a week", "Once or twice a month"), 1, 0)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding education
+abortion_s3_cleaned_v2$college_grad <-
+  ifelse(abortion_s3_cleaned_v2$educ %in%
+    c("Bachelor's degree", "Master's degree", "Professional or doctorate degree"), 1, 0)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding race/ethnicity
+abortion_s3_cleaned_v2$white_non_hisp <-
+  ifelse(abortion_s3_cleaned_v2$race == "White" & abortion_s3_cleaned_v2$hispanic == "No", 1, 0)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding religion
+abortion_s3_cleaned_v2$relig_unaff <-
+  ifelse(abortion_s3_cleaned_v2$religion %in%
+    c("Agnostic", "Atheist", "Nothing in particular"), 1, 0)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding income
+abortion_s3_cleaned_v2$high_income <-
+  ifelse(abortion_s3_cleaned_v2$income %in% c("$100,000 to less than $200,000",
+      "$200,000 to less than $250,000",
+      "Greater than $250,000"), 1, 0)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Creating activist feeling thermometer variable
+abortion_s3_cleaned_v2$ft_activist <- NA
+abortion_s3_cleaned_v2$ft_activist[
+  !(is.na(abortion_s3_cleaned_v2$Q110_1))
+  ] <- abortion_s3_cleaned_v2$Q110_1[
+  !(is.na(abortion_s3_cleaned_v2$Q110_1))]
+abortion_s3_cleaned_v2$ft_activist[
+  !(is.na(abortion_s3_cleaned_v2$Q74_1))
+  ] <- abortion_s3_cleaned_v2$Q74_1[
+  !(is.na(abortion_s3_cleaned_v2$Q74_1))]
+abortion_s3_cleaned_v2$ft_activist[
+  !(is.na(abortion_s3_cleaned_v2$Q128_1))
+  ] <- abortion_s3_cleaned_v2$Q128_1[
+  !(is.na(abortion_s3_cleaned_v2$Q128_1))]
+abortion_s3_cleaned_v2$ft_activist[
+  !(is.na(abortion_s3_cleaned_v2$Q92_1))
+  ] <- abortion_s3_cleaned_v2$Q92_1[
+  !(is.na(abortion_s3_cleaned_v2$Q92_1))]
+abortion_s3_cleaned_v2$ft_activist[
+  !(is.na(abortion_s3_cleaned_v2$Q1_1))
+  ] <- abortion_s3_cleaned_v2$Q1_1[
+  !(is.na(abortion_s3_cleaned_v2$Q1_1))]
+abortion_s3_cleaned_v2$ft_activist[
+  !(is.na(abortion_s3_cleaned_v2$Q137_1))
+  ] <- abortion_s3_cleaned_v2$Q137_1[
+  !(is.na(abortion_s3_cleaned_v2$Q137_1))]
+abortion_s3_cleaned_v2$ft_activist <-
+  as.numeric(abortion_s3_cleaned_v2$ft_activist)
+```
+
+```{r, include = FALSE, message = FALSE}
+#Setting misinformation as reference category
+abortion_s3_cleaned_v2$condition <- factor(abortion_s3_cleaned_v2$condition)
+abortion_s3_cleaned_v2$condition <-
+  relevel(abortion_s3_cleaned_v2$condition, ref = "misinfo")
+```
+
+```{r, include = FALSE, message = FALSE}
+#Setting high familiarity as reference category
+abortion_s3_cleaned_v2$familiarity <- factor(abortion_s3_cleaned_v2$familiarity)
+abortion_s3_cleaned_v2$familiarity <-
+  relevel(abortion_s3_cleaned_v2$familiarity, ref = "High")
+```
+
+## Attitudinal model
+
+```{r, include = FALSE, message = FALSE}
+#Running combined model
+fit1_s3 <- 
+  lm_robust(ft_activist ~ condition*familiarity + pid7 + male + age + 
+  monthly_attend + college_grad + white_non_hisp + relig_unaff, 
+  data = abortion_s3_cleaned_v2)
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Creating texreg object
+
+#IMPORTANT: We initially showed results via interaction terms but switched 
+  #to showing group-specific effects below for clarity.
+#These are based on the SAME model.
+fit1_s3_v2 <- texreg(list(fit1_s3),
+  include.ci = FALSE,
+  custom.coef.names = 
+    c("Intercept", "Control", "Fact-check", "Low familiarity",
+      "Partisanship (1-to-7)",
+      "Male", "Age", "Monthly attendance", "College grad", "White non-Hispanic", 
+      "Religiously unaffiliated", "Control*Low familiarity",
+      "Fact-check*Low familiarity"),
+  caption = "Model predicting feelings (0-to-100 scale) toward the activist falsely claiming that more contraception availability increases abortion demand",
+  caption.above = TRUE, float.pos = "H",
+  single.row = TRUE,
+       omit.coef = "pid7|male|age|monthly_attend|college_grad|white_non_hisp|relig_unaff")
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Extracting RMSE value
+fit1_s3_rmse <- as.numeric(sub('.*RMSE\\s*&\\s*\\$([0-9\\.]+)\\$.*', '\\1', fit1_s3_v2[1]))
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Getting effects of assignment conditions by familiarity of activist
+fit1_s3_effects <- avg_comparisons(fit1_s3, variables = "condition", by = "familiarity")
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Creating texreg object
+fit1_s3_effects_v2 <- createTexreg(
+  coef.names = c("Intercept", "Control (Shapiro)", "Control (Gruber)", "Fact-check (Shapiro)", "Fact-check (Gruber)"),
+  coef = c(as.numeric(fit1_s3$coefficients[1]), fit1_s3_effects$estimate),
+  se = c(as.numeric(fit1_s3$std.error[1]), fit1_s3_effects$std.error),
+  pvalues = c(as.numeric(fit1_s3$p.value[1]), fit1_s3_effects$p.value),
+  gof = c(as.numeric(summary(fit1_s3)[9]), 
+          as.numeric(summary(fit1_s3)[10]), 
+          as.integer(summary(fit1_s3)[13]), 
+          fit1_s3_rmse ),
+  gof.names = c("R$^2$", "Adj. R$^2$", "Num. obs", "RMSE")
+)
+```
+
+```{r, echo = FALSE, results='asis'}
+#Creating regression table
+texreg(fit1_s3_effects_v2,
+  custom.coef.names = 
+    c("Intercept", "Control (Shapiro)", "Control (Gruber)", "Fact-check (Shapiro)", "Fact-check (Gruber)"),
+  caption = "Model predicting feelings (0-to-100 scale) toward the activist falsely claiming that more contraception availability increases abortion demand",
+  caption.above = TRUE, 
+  float.pos = "H",
+  single.row = "TRUE")
+```
+
+## Creating attitudinal beliefs graph
+
+```{r, include = FALSE, warning = FALSE}
+#Obtaining average treatment effects of the fact-check
+  #when familiarity = 0 and 1
+df_s3 <-
+  cplot(fit1_s3, "familiarity", "conditionfc", what = "effect",
+    draw = FALSE, xvals = prediction::seq_range(0:1, n = 2))
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Obtaining average treatment effects of the misinformation
+  #when familiarity = 0 and 1
+#Note: I later reverse code this (considering that the misinformation,
+  #group and not the control group, is the reference category)
+df2_s3 <-
+  cplot(fit1_s3, "familiarity", "conditioncontrol", what = "effect",
+    draw = FALSE, xvals = prediction::seq_range(0:1, n = 2))
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Combining the data frames together
+df3_s3 <-
+  rbind(df_s3, df2_s3)
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Creating a data frame that more clearly shows the ATE of
+  #the fact-check and the misinformation
+df4_s3 <- df3_s3
+
+#Reverse coding these values so that we can see the effect of misinformation
+df4_s3$yvals[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "High"] <- 
+  -df4_s3$yvals[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "High"]
+df4_s3$upper[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "High"] <- 
+  -df4_s3$upper[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "High"]
+df4_s3$lower[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "High"] <- 
+  -df4_s3$lower[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "High"]
+
+df4_s3$yvals[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "Low"] <- 
+  -df4_s3$yvals[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "Low"]
+df4_s3$upper[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "Low"] <- 
+  -df4_s3$upper[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "Low"]
+df4_s3$lower[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "Low"] <- 
+  -df4_s3$lower[
+  df4_s3$factor == "conditioncontrol" & df4_s3$xvals == "Low"]
+
+#Creating a new variable with clearer 
+  #Misinformation and Fact check labels
+df4_s3$Condition <- NA
+df4_s3$Condition[
+  df4_s3$factor == "conditioncontrol"
+  ] <- "Misinformation"
+df4_s3$Condition[
+  df4_s3$factor == "conditionfc"
+  ] <- "Fact-check"
+
+df4_s3$factor <- NULL
+
+#Rationale: I want to be able to position ATEs along the x axis
+df4_s3$var <- c(1.975, 0.975, 2.025, 1.025)
+
+#Renaming column
+names(df4_s3)[names(df4_s3) == "yvals"] <- "AME"
+```
+
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+#Creating graph
+df4_s3$Condition <- 
+  factor(df4_s3$Condition,
+         levels = c("Misinformation", "Fact-check"))
+
+df4_s3 %>%
+  ggplot(aes(x=var, y=AME, color=Condition)) +
+  geom_point() +
+  geom_segment(aes(x = var, y = lower, xend = var, yend = upper)) +
+  scale_x_continuous(breaks=c(1:2), 
+      expand = expansion(mult = 0.2),
+      labels=c("Seth Gruber", "Ben Shapiro")) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "purple") +
+  xlab("Feeling thermometer rating") +
+  ylab("Average effect on \nfeeling thermometer") +
+  scale_color_manual(
+    values = c(
+      "Misinformation" = "red",
+      "Fact-check" = "blue"
+    )) +
+  theme_classic() +
+  #theme(legend.position = "none") +
+  ylim(-10,5) +
+  theme(aspect.ratio = 1/3)
+```
+
+## Factual beliefs models
+
+```{r message=FALSE, include=FALSE}
+#Creating factual beliefs variable
+abortion_s3_cleaned_v2$factual_belief <- NA
+abortion_s3_cleaned_v2$factual_belief[
+  !(is.na(abortion_s3_cleaned_v2$Q91))] <-
+  abortion_s3_cleaned_v2$Q91[
+  !(is.na(abortion_s3_cleaned_v2$Q91))  
+  ]
+abortion_s3_cleaned_v2$factual_belief[
+  !(is.na(abortion_s3_cleaned_v2$Q109))] <-
+  abortion_s3_cleaned_v2$Q109[
+  !(is.na(abortion_s3_cleaned_v2$Q109))  
+  ]
+abortion_s3_cleaned_v2$factual_belief[
+  !(is.na(abortion_s3_cleaned_v2$Q127))] <-
+  abortion_s3_cleaned_v2$Q127[
+  !(is.na(abortion_s3_cleaned_v2$Q127))  
+  ]
+abortion_s3_cleaned_v2$factual_belief[
+  !(is.na(abortion_s3_cleaned_v2$Q1_125))] <-
+  abortion_s3_cleaned_v2$Q1_125[
+  !(is.na(abortion_s3_cleaned_v2$Q1_125))  
+  ]
+abortion_s3_cleaned_v2$factual_belief[
+  !(is.na(abortion_s3_cleaned_v2$Q136))] <-
+  abortion_s3_cleaned_v2$Q136[
+  !(is.na(abortion_s3_cleaned_v2$Q136))  
+  ]
+abortion_s3_cleaned_v2$factual_belief[
+  !(is.na(abortion_s3_cleaned_v2$Q73))] <-
+  abortion_s3_cleaned_v2$Q73[
+  !(is.na(abortion_s3_cleaned_v2$Q73))  
+  ]
+```
+
+```{r, include = FALSE, message = FALSE}
+#Recoding factual beliefs
+abortion_s3_cleaned_v2$factual_belief_v2 <- NA
+abortion_s3_cleaned_v2$factual_belief_v2[
+  abortion_s3_cleaned_v2$factual_belief == "Not at all accurate"
+  ] <- 1
+abortion_s3_cleaned_v2$factual_belief_v2[
+  abortion_s3_cleaned_v2$factual_belief == "Not very accurate"
+  ] <- 2
+abortion_s3_cleaned_v2$factual_belief_v2[
+  abortion_s3_cleaned_v2$factual_belief == "Somewhat accurate"
+  ] <- 3
+abortion_s3_cleaned_v2$factual_belief_v2[
+  abortion_s3_cleaned_v2$factual_belief == "Very accurate"
+  ] <- 4
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Running factual beliefs model
+fit2_s3 <- lm_robust(factual_belief_v2 ~ condition*familiarity + 
+  pid7 + male + age + 
+  monthly_attend + college_grad + white_non_hisp + relig_unaff, 
+  data = abortion_s3_cleaned_v2)
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Creating texreg object
+
+#IMPORTANT: We initially showed results via interaction terms but switched 
+  #to showing group-specific effects below for clarity.
+#These are based on the SAME model.
+fit2_s3_v2 <- texreg(fit2_s3,
+  include.ci = FALSE,
+  custom.coef.names = 
+    c("Intercept", "Control", "Fact-check", "Low familiarity",
+      "Partisanship (1-to-7)",
+      "Male", "Age", "Monthly attendance", "College grad", "White non-Hispanic", 
+      "Religiously unaffiliated",
+      "Control * Low familiarity", "Fact-check * Low familiarity"),
+  caption = "Effect of fact-check on the belief that more contraception availability increases abortion demand (1-to-4 scale)", 
+  caption.above = TRUE, float.pos = "H",
+  single.row = TRUE,
+       omit.coef = "pid7|male|age|monthly_attend|college_grad|white_non_hisp|relig_unaff")
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Extracting RMSE value
+fit2_s3_rmse <- as.numeric(sub('.*RMSE\\s*&\\s*\\$([0-9\\.]+)\\$.*', '\\1', fit2_s3_v2[1]))
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Getting effects of assignment conditions by familiarity of activist
+fit2_s3_effects <- avg_comparisons(fit2_s3, variables = "condition", by = "familiarity")
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Creating texreg object
+fit2_s3_effects_v2 <- createTexreg(
+  coef.names = c("Intercept", "Control (Shapiro)", "Control (Gruber)", "Fact-check (Shapiro)", "Fact-check (Gruber)"),
+  coef = c(as.numeric(fit2_s3$coefficients[1]), fit2_s3_effects$estimate),
+  se = c(as.numeric(fit2_s3$std.error[1]), fit2_s3_effects$std.error),
+  pvalues = c(as.numeric(fit2_s3$p.value[1]), fit2_s3_effects$p.value),
+  gof = c(as.numeric(summary(fit2_s3)[9]), 
+          as.numeric(summary(fit2_s3)[10]), 
+          as.integer(summary(fit2_s3)[13]), 
+          fit2_s3_rmse),
+  gof.names = c("R$^2$", "Adj. R$^2$", "Num. obs", "RMSE")
+)
+```
+
+```{r, echo = FALSE, results='asis'}
+#Creating regression table
+texreg(fit2_s3_effects_v2,
+  custom.coef.names = 
+    c("Intercept", "Control (Shapiro)", "Control (Gruber)", "Fact-check (Shapiro)", "Fact-check (Gruber)"),
+  caption = "Effect of fact-check on the belief that more contraception availability increases abortion demand (1-to-4 scale)",
+  caption.above = TRUE, 
+  float.pos = "H",
+  single.row = "TRUE")
+```
+
+\newpage
+
+## Balance table
+
+```{r, include = FALSE, warning = FALSE}
+#Recoding income variable
+abortion_s3_cleaned_v2$income_100000 <-
+  ifelse(abortion_s3_cleaned_v2$income %in% 
+    c("$100,000 to less than $200,000",
+      "$200,000 to less than $250,000",
+      "Greater than $250,000"),1,0)
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Recoding age variable
+abortion_s3_cleaned_v2$age[
+  abortion_s3_cleaned_v2$age < 18
+  ] <- NA
+abortion_s3_cleaned_v2$age[
+  abortion_s3_cleaned_v2$age > 100
+  ] <- NA
+```
+
+
+```{r, include = FALSE, warning = FALSE}
+#Selecting just some variables
+abortion_s3_cleaned_v3 <-
+  abortion_s3_cleaned_v2 %>%
+  dplyr::select(condition,
+    age, pid7, male, white_non_hisp,
+    college_grad, income_100000)
+```
+
+```{r, include = FALSE, warning = FALSE}
+#Renaming column names
+colnames(abortion_s3_cleaned_v3) <-
+  c("Condition", "Age", 
+    "Partisanship (7-point scale)",
+    "Share who are male", 
+    "Share who are non-Hispanic White", 
+    "Share who are college graduates", 
+    "Share who have household incomes of $100,000+"
+    )
+
+abortion_s3_cleaned_v3$Condition <-
+  as.character(abortion_s3_cleaned_v3$Condition)
+```
+
+
+```{r, include = FALSE, warning = FALSE}
+#Setting up balance table
+abortion_bt_s3 <- balance_table(abortion_s3_cleaned_v3, "Condition")
+colnames(abortion_bt_s3) <- 
+  c("Variable", "Control", "Fact-check", "Misinfo", "p-value (c vs fc)", "p-value (c vs mis)")
+```
+
+```{r, echo = FALSE, results='asis'}
+#Printing out Gruber balance table
+print(xtable(abortion_bt_s3), size = "tiny")
+```
